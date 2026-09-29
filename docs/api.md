@@ -1,0 +1,2 @@
+| Method | Endpoint | Role | Purpose |
+|---|---|---|---|
