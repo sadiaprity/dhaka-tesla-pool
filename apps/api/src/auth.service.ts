@@ -66,7 +66,7 @@ export async function loginUser(input: LoginUserInput): Promise<string> {
 	}
 
 	return jwt.sign(
-		{ userId: user.id, role: user.role },
+		{ userId: user.id, role: user.role, name: user.name },
 		secret,
 		{ expiresIn: "7d" },
 	);
