@@ -15,6 +15,7 @@ import {
 	ZONE_DISTANCE_METERS,
 } from "./config/zones";
 import { prisma } from "./prisma";
+import { PoolStatus } from "./generated/prisma/enums";
 
 const cancellableStatuses = [
 	RideStatus.REQUESTED,
@@ -163,5 +164,108 @@ export async function cancelRideRequest(
 		return transaction.rideRequest.findUniqueOrThrow({
 			where: { id: rideRequestId },
 		});
+	});
+}
+
+export class InvalidTransitionError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "InvalidTransitionError";
+	}
+}
+
+export class PoolNotFoundError extends Error {
+	constructor() {
+		super("Pool not found");
+		this.name = "PoolNotFoundError";
+	}
+}
+
+export class PoolNotOwnedError extends Error {
+	constructor() {
+		super("Pool is not owned by this driver");
+		this.name = "PoolNotOwnedError";
+	}
+}
+
+const expectedFromStatus: Partial<Record<RideStatus, RideStatus>> = {
+	[RideStatus.ACCEPTED]: RideStatus.MATCHED,
+	[RideStatus.DRIVER_ARRIVED]: RideStatus.ACCEPTED,
+	[RideStatus.STARTED]: RideStatus.DRIVER_ARRIVED,
+	[RideStatus.COMPLETED]: RideStatus.STARTED,
+};
+
+export async function advancePool(
+	poolId: string,
+	nextStatus: RideStatus,
+	driverUserId: string,
+) {
+	const fromStatus = expectedFromStatus[nextStatus];
+	if (!fromStatus) {
+		throw new InvalidTransitionError(`Cannot advance a pool to ${nextStatus}`);
+	}
+
+	return prisma.$transaction(async (transaction) => {
+		await transaction.$queryRaw`
+			SELECT id
+			FROM "Pool"
+			WHERE id = ${poolId}
+			FOR UPDATE
+		`;
+
+		const pool = await transaction.pool.findUnique({
+			where: { id: poolId },
+				select: {
+					id: true,
+					vehicle: { select: { driverId: true } },
+					members: {
+						where: { isActive: true },
+						select: {
+							rideRequestId: true,
+							rideRequest: { select: { status: true } },
+						},
+					},
+				},
+			});
+		if (!pool) {
+			throw new PoolNotFoundError();
+		}
+		if (pool.vehicle.driverId !== driverUserId) {
+			throw new PoolNotOwnedError();
+		}
+
+		for (const member of pool.members) {
+			if (member.rideRequest.status !== fromStatus) {
+				throw new InvalidTransitionError(
+					`Cannot transition ride request from ${member.rideRequest.status} to ${nextStatus}`,
+				);
+			}
+		}
+
+		const rideRequests = [];
+		for (const member of pool.members) {
+			rideRequests.push(
+				await transaction.rideRequest.update({
+					where: { id: member.rideRequestId },
+					data: { status: nextStatus },
+				}),
+			);
+			await transaction.rideStatusHistory.create({
+				data: {
+					rideRequestId: member.rideRequestId,
+					status: nextStatus,
+				},
+			});
+		}
+
+		const updatedPool =
+			nextStatus === RideStatus.ACCEPTED
+				? await transaction.pool.update({
+						where: { id: poolId },
+						data: { status: PoolStatus.CLOSED },
+					})
+				: await transaction.pool.findUniqueOrThrow({ where: { id: poolId } });
+
+		return { pool: updatedPool, rideRequests };
 	});
 }

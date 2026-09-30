@@ -69,18 +69,15 @@ export async function getRide(
 		res.status(401).json({ error: "Unauthorized" });
 		return;
 	}
+	const rideId = req.params.id;
+	if (typeof rideId !== "string") {
+		res.status(400).json({ error: "Ride request ID is required" });
+		return;
+	}
 
 	try {
 		const ride = await prisma.rideRequest.findUnique({
-			where: { id: req.params.id },
-			include: {
-				member: {
-					include: {
-						pool: { include: { vehicle: true } },
-					},
-				},
-				history: { orderBy: { changedAt: "asc" } },
-			},
+			where: { id: rideId },
 		});
 		if (!ride) {
 			res.status(404).json({ error: "Ride request not found" });
@@ -88,13 +85,23 @@ export async function getRide(
 		}
 
 		const isOwner = ride.passengerId === user.userId;
-		const isPoolDriver = ride.member?.pool.vehicle.driverId === user.userId;
+		const [member, history] = await Promise.all([
+			prisma.poolMember.findUnique({
+				where: { rideRequestId: rideId },
+				include: { pool: { include: { vehicle: true } } },
+			}),
+			prisma.rideStatusHistory.findMany({
+				where: { rideRequestId: rideId },
+				orderBy: { changedAt: "asc" },
+			}),
+		]);
+		const isPoolDriver = member?.pool.vehicle.driverId === user.userId;
 		if (!isOwner && !isPoolDriver) {
 			res.status(403).json({ error: "Forbidden" });
 			return;
 		}
 
-		res.json(ride);
+		res.json({ ...ride, member, history });
 	} catch (error) {
 		next(error);
 	}
@@ -110,10 +117,15 @@ export async function cancelRide(
 		res.status(403).json({ error: "Passengers only" });
 		return;
 	}
+	const rideId = req.params.id;
+	if (typeof rideId !== "string") {
+		res.status(400).json({ error: "Ride request ID is required" });
+		return;
+	}
 
 	try {
 		const ride = await prisma.rideRequest.findUnique({
-			where: { id: req.params.id },
+			where: { id: rideId },
 			select: { passengerId: true },
 		});
 		if (!ride) {
@@ -125,7 +137,7 @@ export async function cancelRide(
 			return;
 		}
 
-		const cancelledRide = await cancelRideRequest(req.params.id, user.userId);
+		const cancelledRide = await cancelRideRequest(rideId, user.userId);
 		res.json(cancelledRide);
 	} catch (error) {
 		if (error instanceof RideRequestNotCancellableError) {
