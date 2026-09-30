@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { API_URL } from "@/lib/api";
 
-const API_BASE_URL = (
-	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
 const PAGE_SIZE = 20;
 
 const RIDE_STATUSES = [
@@ -214,7 +212,7 @@ export default function PassengerHistoryPage() {
 
 			try {
 				const response = await fetch(
-					`${API_BASE_URL}/rides/history?limit=${PAGE_SIZE}&offset=0`,
+					`${API_URL}/rides/history?limit=${PAGE_SIZE}&offset=0`,
 					{ headers: { Authorization: `Bearer ${token}` } },
 				);
 				const result: unknown = await response.json().catch(() => null);
@@ -272,7 +270,7 @@ export default function PassengerHistoryPage() {
 		setIsLoadingMore(true);
 		try {
 			const response = await fetch(
-				`${API_BASE_URL}/rides/history?limit=${PAGE_SIZE}&offset=${nextOffset}`,
+				`${API_URL}/rides/history?limit=${PAGE_SIZE}&offset=${nextOffset}`,
 				{ headers: { Authorization: `Bearer ${token}` } },
 			);
 			const result: unknown = await response.json().catch(() => null);

@@ -2,10 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { API_URL } from "@/lib/api";
 
-const API_BASE_URL = (
-	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
 const POLL_INTERVAL_MS = 5000;
 
 const RIDE_STATUSES = [
@@ -199,7 +197,7 @@ export default function PassengerRideStatusPage() {
 
 			try {
 				const response = await fetch(
-					`${API_BASE_URL}/rides/${encodeURIComponent(rideId)}`,
+					`${API_URL}/rides/${encodeURIComponent(rideId)}`,
 					{ headers: { Authorization: `Bearer ${token}` } },
 				);
 				const result: unknown = await response.json().catch(() => null);
@@ -281,7 +279,7 @@ export default function PassengerRideStatusPage() {
 		setIsCancelling(true);
 		try {
 			const response = await fetch(
-				`${API_BASE_URL}/rides/${encodeURIComponent(ride.id)}/cancel`,
+				`${API_URL}/rides/${encodeURIComponent(ride.id)}/cancel`,
 				{
 					method: "POST",
 					headers: { Authorization: `Bearer ${token}` },

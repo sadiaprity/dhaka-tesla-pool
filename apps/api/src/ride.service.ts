@@ -141,6 +141,7 @@ export async function cancelRideRequest(
 	userId: string,
 ) {
 	return prisma.$transaction(async (transaction) => {
+		await releaseSeat(rideRequestId, transaction);
 		const cancellation = await transaction.rideRequest.updateMany({
 			where: {
 				id: rideRequestId,
@@ -153,7 +154,6 @@ export async function cancelRideRequest(
 			throw new RideRequestNotCancellableError();
 		}
 
-		await releaseSeat(rideRequestId, transaction);
 		await transaction.rideStatusHistory.create({
 			data: {
 				rideRequestId,
@@ -211,11 +211,11 @@ export class PoolNotOwnedError extends Error {
 	}
 }
 
-const expectedFromStatus: Partial<Record<RideStatus, RideStatus>> = {
-	[RideStatus.ACCEPTED]: RideStatus.MATCHED,
-	[RideStatus.DRIVER_ARRIVED]: RideStatus.ACCEPTED,
-	[RideStatus.STARTED]: RideStatus.DRIVER_ARRIVED,
-	[RideStatus.COMPLETED]: RideStatus.STARTED,
+const eligibleFromStatuses: Partial<Record<RideStatus, RideStatus[]>> = {
+	[RideStatus.ACCEPTED]: [RideStatus.MATCHED],
+	[RideStatus.DRIVER_ARRIVED]: [RideStatus.MATCHED, RideStatus.ACCEPTED],
+	[RideStatus.STARTED]: [RideStatus.DRIVER_ARRIVED],
+	[RideStatus.COMPLETED]: [RideStatus.STARTED],
 };
 
 export async function advancePool(
@@ -223,8 +223,8 @@ export async function advancePool(
 	nextStatus: RideStatus,
 	driverUserId: string,
 ) {
-	const fromStatus = expectedFromStatus[nextStatus];
-	if (!fromStatus) {
+	const fromStatuses = eligibleFromStatuses[nextStatus];
+	if (!fromStatuses) {
 		throw new InvalidTransitionError(`Cannot advance a pool to ${nextStatus}`);
 	}
 
@@ -240,6 +240,7 @@ export async function advancePool(
 			where: { id: poolId },
 				select: {
 					id: true,
+					status: true,
 					vehicle: { select: { driverId: true } },
 					members: {
 						where: { isActive: true },
@@ -256,17 +257,25 @@ export async function advancePool(
 		if (pool.vehicle.driverId !== driverUserId) {
 			throw new PoolNotOwnedError();
 		}
+		if (nextStatus === RideStatus.ACCEPTED && pool.status !== PoolStatus.OPEN) {
+			throw new InvalidTransitionError("Only an open pool can be accepted");
+		}
 
-		for (const member of pool.members) {
-			if (member.rideRequest.status !== fromStatus) {
-				throw new InvalidTransitionError(
-					`Cannot transition ride request from ${member.rideRequest.status} to ${nextStatus}`,
-				);
-			}
+		const eligibleMembers = pool.members.filter((member) =>
+			fromStatuses.includes(member.rideRequest.status),
+		);
+		if (
+			eligibleMembers.length === 0 ||
+			(nextStatus === RideStatus.ACCEPTED &&
+				eligibleMembers.length !== pool.members.length)
+		) {
+			throw new InvalidTransitionError(
+				`No active ride requests can transition to ${nextStatus}`,
+			);
 		}
 
 		const rideRequests = [];
-		for (const member of pool.members) {
+		for (const member of eligibleMembers) {
 			rideRequests.push(
 				await transaction.rideRequest.update({
 					where: { id: member.rideRequestId },

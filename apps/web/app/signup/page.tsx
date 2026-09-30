@@ -3,12 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { API_URL } from "@/lib/api";
 
 type UserRole = "PASSENGER" | "DRIVER";
-
-const API_BASE_URL = (
-	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
 
 export default function SignupPage() {
 	const router = useRouter();
@@ -26,7 +23,7 @@ export default function SignupPage() {
 		setIsSubmitting(true);
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/auth/register`, {
+			const response = await fetch(`${API_URL}/auth/register`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name: name.trim(), email, password, role }),

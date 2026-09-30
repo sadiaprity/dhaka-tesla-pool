@@ -3,10 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useSyncExternalStore, type FormEvent } from "react";
-
-const API_BASE_URL = (
-	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
+import { API_URL } from "@/lib/api";
 
 const DHAKA_ZONES = [
 	"Banani",
@@ -133,7 +130,7 @@ export default function PassengerRequestPage() {
 
 		setIsSubmitting(true);
 		try {
-			const response = await fetch(`${API_BASE_URL}/rides`, {
+			const response = await fetch(`${API_URL}/rides`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",

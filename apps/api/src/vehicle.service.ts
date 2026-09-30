@@ -55,6 +55,10 @@ export async function setVehicleOnlineStatus(
 	return prisma.vehicle.findUniqueOrThrow({ where: { id: vehicleId } });
 }
 
+export function getVehicleForDriver(driverId: string) {
+	return prisma.vehicle.findUnique({ where: { driverId } });
+}
+
 export async function listVehicleRequests(
 	vehicleId: string,
 	driverId: string,
@@ -71,9 +75,16 @@ export async function listVehicleRequests(
 		where: { vehicleId },
 		orderBy: { createdAt: "desc" },
 		include: {
+			vehicle: {
+				select: { id: true, capacity: true, isOnline: true },
+			},
 			members: {
 				where: { isActive: true },
-				include: { rideRequest: true },
+				include: {
+					rideRequest: {
+						include: { passenger: { select: { name: true } } },
+					},
+				},
 			},
 		},
 	});

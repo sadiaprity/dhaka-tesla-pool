@@ -10,6 +10,7 @@ import { prisma } from "./prisma";
 import {
 	VehicleAlreadyRegisteredError,
 	VehicleNotOwnedError,
+	getVehicleForDriver,
 	listVehicleHistory,
 	listVehicleRequests,
 	registerVehicle,
@@ -231,3 +232,38 @@ export async function getVehicleHistory(
 		next(error);
 	}
 }
+
+export async function getMyVehicle(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const user = req.user;
+	if (!user || user.role !== UserRole.DRIVER) {
+		res.status(403).json({ error: "Drivers only" });
+		return;
+	}
+
+	try {
+		const vehicle = await getVehicleForDriver(user.userId);
+		if (!vehicle) {
+			res.status(404).json({ error: "Driver has no registered vehicle" });
+			return;
+		}
+		res.json(vehicle);
+	} catch (error) {
+		next(error);
+	}
+}
+
+function advancePoolAtStatus(targetStatus: RideStatus) {
+	return (req: Request, res: Response, next: NextFunction) => {
+		req.body = { targetStatus };
+		return advanceVehiclePool(req, res, next);
+	};
+}
+
+export const acceptPool = advancePoolAtStatus(RideStatus.ACCEPTED);
+export const markPoolDriverArrived = advancePoolAtStatus(RideStatus.DRIVER_ARRIVED);
+export const startPoolTrip = advancePoolAtStatus(RideStatus.STARTED);
+export const completePoolTrip = advancePoolAtStatus(RideStatus.COMPLETED);

@@ -3,12 +3,9 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { API_URL } from "@/lib/api";
 
 type UserRole = "PASSENGER" | "DRIVER";
-
-const API_BASE_URL = (
-	process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
 
 function readTokenRole(token: string): UserRole | null {
 	const payload = token.split(".")[1];
@@ -43,7 +40,7 @@ export default function LoginPage() {
 		setIsSubmitting(true);
 
 		try {
-			const response = await fetch(`${API_BASE_URL}/auth/login`, {
+			const response = await fetch(`${API_URL}/auth/login`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ email, password }),
