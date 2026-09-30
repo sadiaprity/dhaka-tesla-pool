@@ -6,6 +6,7 @@ import {
 	InvalidRideRequestError,
 	RideRequestNotCancellableError,
 	cancelRideRequest,
+	listPassengerRideHistory,
 	requestRide,
 } from "./ride.service";
 import { z } from "zod";
@@ -24,6 +25,40 @@ const requestRideSchema = z
 		path: ["destinationZone"],
 		message: "Pickup and destination zones must be different",
 	});
+
+const paginationSchema = z.object({
+	limit: z.coerce.number().int().min(1).max(100).default(20),
+	offset: z.coerce.number().int().min(0).default(0),
+});
+
+export async function getRideHistory(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const user = req.user;
+	if (!user || user.role !== UserRole.PASSENGER) {
+		res.status(403).json({ error: "Passengers only" });
+		return;
+	}
+
+	const pagination = paginationSchema.safeParse(req.query);
+	if (!pagination.success) {
+		res.status(400).json({ error: pagination.error.issues });
+		return;
+	}
+
+	try {
+		const history = await listPassengerRideHistory(
+			user.userId,
+			pagination.data.limit,
+			pagination.data.offset,
+		);
+		res.json(history);
+	} catch (error) {
+		next(error);
+	}
+}
 
 export async function createRide(
 	req: Request,

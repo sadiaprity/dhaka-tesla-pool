@@ -10,6 +10,7 @@ import { prisma } from "./prisma";
 import {
 	VehicleAlreadyRegisteredError,
 	VehicleNotOwnedError,
+	listVehicleHistory,
 	listVehicleRequests,
 	registerVehicle,
 	setVehicleOnlineStatus,
@@ -31,6 +32,11 @@ const advancePoolSchema = z.object({
 		RideStatus.STARTED,
 		RideStatus.COMPLETED,
 	] as const),
+});
+
+const paginationSchema = z.object({
+	limit: z.coerce.number().int().min(1).max(100).default(20),
+	offset: z.coerce.number().int().min(0).default(0),
 });
 
 export async function createVehicle(
@@ -178,6 +184,45 @@ export async function getVehicleRequests(
 	try {
 		const pools = await listVehicleRequests(vehicleId, user.userId);
 		res.json(pools);
+	} catch (error) {
+		if (error instanceof VehicleNotOwnedError) {
+			res.status(403).json({ error: error.message });
+			return;
+		}
+		next(error);
+	}
+}
+
+export async function getVehicleHistory(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const user = req.user;
+	if (!user || user.role !== UserRole.DRIVER) {
+		res.status(403).json({ error: "Drivers only" });
+		return;
+	}
+	const vehicleId = req.params.id;
+	if (typeof vehicleId !== "string") {
+		res.status(400).json({ error: "Vehicle ID is required" });
+		return;
+	}
+
+	const pagination = paginationSchema.safeParse(req.query);
+	if (!pagination.success) {
+		res.status(400).json({ error: pagination.error.issues });
+		return;
+	}
+
+	try {
+		const history = await listVehicleHistory(
+			vehicleId,
+			user.userId,
+			pagination.data.limit,
+			pagination.data.offset,
+		);
+		res.json(history);
 	} catch (error) {
 		if (error instanceof VehicleNotOwnedError) {
 			res.status(403).json({ error: error.message });

@@ -78,3 +78,42 @@ export async function listVehicleRequests(
 		},
 	});
 }
+
+export async function listVehicleHistory(
+	vehicleId: string,
+	driverId: string,
+	limit: number,
+	offset: number,
+) {
+	const vehicle = await prisma.vehicle.findUnique({
+		where: { id: vehicleId },
+		select: { driverId: true },
+	});
+	if (!vehicle || vehicle.driverId !== driverId) {
+		throw new VehicleNotOwnedError();
+	}
+
+	const where = { vehicleId };
+	const [items, total] = await Promise.all([
+		prisma.pool.findMany({
+			where,
+			orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+			take: limit,
+			skip: offset,
+			include: {
+				members: {
+					include: {
+						rideRequest: {
+							include: {
+								history: { orderBy: { changedAt: "asc" } },
+							},
+						},
+					},
+				},
+			},
+		}),
+		prisma.pool.count({ where }),
+	]);
+
+	return { items, total, limit, offset };
+}

@@ -167,6 +167,29 @@ export async function cancelRideRequest(
 	});
 }
 
+export async function listPassengerRideHistory(
+	passengerId: string,
+	limit: number,
+	offset: number,
+) {
+	const where = { passengerId };
+	const [items, total] = await Promise.all([
+		prisma.rideRequest.findMany({
+			where,
+			orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+			take: limit,
+			skip: offset,
+			include: {
+				member: { include: { pool: true } },
+				history: { orderBy: { changedAt: "asc" } },
+			},
+		}),
+		prisma.rideRequest.count({ where }),
+	]);
+
+	return { items, total, limit, offset };
+}
+
 export class InvalidTransitionError extends Error {
 	constructor(message: string) {
 		super(message);
