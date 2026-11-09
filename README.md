@@ -657,10 +657,6 @@ Tools used: ChatGPT, GitHub Copilot, and official documentation.
 
 AI-generated suggestions were reviewed and tested before being incorporated. Implementation decisions were made based on the project's requirements, consistency, and maintainability.
 
-**Accepted suggestion:** [Add a specific suggestion you accepted and how it improved the implementation.]
-
-**Rejected or modified suggestion:** [Add a specific suggestion you rejected or changed and explain why.]
-
 All implemented functionality should be explainable and maintainable by the developer.
 
 ---
